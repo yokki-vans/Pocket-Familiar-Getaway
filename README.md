@@ -69,7 +69,12 @@ MAX_VOICE_NOTE_MB=50
 UPLOAD_DIR=./uploads
 DEFAULT_AGENT=hermes
 HERMES_BASE_URL=http://hermes-gateway:8080
-HERMES_API_KEY=<Hermes API key>
+HERMES_LOGIN=<Hermes login>
+HERMES_PASSWORD=<Hermes password>
+HERMES_LOGIN_PATH=/api/v1/auth/login
+HERMES_USERNAME_FIELD=login
+HERMES_PASSWORD_FIELD=password
+HERMES_SESSION_TTL_SECONDS=3300
 HERMES_TIMEOUT_MS=60000
 STT_PROVIDER=mock
 OPENAI_API_KEY=
@@ -212,6 +217,8 @@ Expected with Tailscale and Hermes online:
 ```
 
 If Hermes is not reachable yet, `ok` may be `false` and Hermes will show `offline`. The ESP32 can still pair and use gateway endpoints that do not require Hermes.
+
+Hermes authentication uses login/password. The gateway logs in to Hermes server-side, caches the returned bearer token or session cookie, and retries once with a fresh login if Hermes returns `401` or `403`. Keep Hermes credentials only in Railway variables.
 
 ### 9. Pair the ESP32
 
@@ -360,7 +367,7 @@ These messages can appear during container boot. Check `/health` after the app i
 
 Hermes is `offline`
 
-Check `HERMES_BASE_URL`, `HERMES_API_KEY`, Tailscale ACLs, and that the Hermes node is tagged and reachable on the configured port.
+Check `HERMES_BASE_URL`, `HERMES_LOGIN`, `HERMES_PASSWORD`, `HERMES_LOGIN_PATH`, Tailscale ACLs, and that the Hermes node is tagged and reachable on the configured port.
 
 Railway filesystem is ephemeral
 
