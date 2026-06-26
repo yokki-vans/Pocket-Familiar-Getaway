@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Device {
+  id              String         @id
+  name            String
+  hardware        String
+  firmwareVersion String
+  tokenHash       String
+  publicKey       String?
+  activeAgent     String         @default("hermes")
+  status          DeviceLifecycleStatus @default(active)
+  pairedAt        DateTime       @default(now())
+  lastSeenAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  statuses        DeviceStatus[]
+  voiceNotes      VoiceNote[]
+  agentEvents     AgentEvent[]
+}
+
+model PairingSession {
+  id              String         @id
+  pairingCodeHash String
+  deviceName      String
+  hardware        String
+  firmwareVersion String
+  publicKey       String?
+  status          PairingStatus  @default(pending)
+  expiresAt       DateTime
+  confirmedAt     DateTime?
+  consumedAt      DateTime?
+  deviceId        String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model DeviceStatus {
+  id             String   @id @default(cuid())
+  deviceId       String
+  batteryPercent Int?
+  charging       Boolean?
+  wifiRssi       Int?
+  freeHeap       Int?
+  freePsram      Int?
+  sdPresent      Boolean?
+  sdFreeMb       Int?
+  currentScreen  String?
+  uptimeSec      Int?
+  rawJson        Json
+  createdAt      DateTime @default(now())
+  device         Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+}
+
+model VoiceNote {
+  id                  String              @id
+  deviceId            String
+  localNoteId         String
+  title               String?
+  filePath            String
+  originalFilename    String?
+  mimeType            String
+  sizeBytes           Int
+  durationMs          Int
+  sampleRate          Int
+  bitsPerSample       Int
+  channels            Int
+  status              VoiceNoteStatus     @default(uploaded)
+  transcriptionStatus TranscriptionStatus @default(not_transcribed)
+  transcript           String?
+  agentSendStatus     AgentSendStatus     @default(not_sent)
+  activeAgent         String              @default("hermes")
+  createdAtDevice     DateTime
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  device              Device              @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, localNoteId])
+}
+
+model AgentEvent {
+  id             String   @id @default(cuid())
+  deviceId       String
+  agentId        String
+  type           String
+  requestJson    Json
+  responseJson   Json?
+  resultCardJson Json?
+  status         String
+  createdAt      DateTime @default(now())
+  device         Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+}
+
+enum DeviceLifecycleStatus {
+  active
+  revoked
+}
+
+enum PairingStatus {
+  pending
+  confirmed
+  expired
+  consumed
+}
+
+enum VoiceNoteStatus {
+  uploaded
+  processed
+  failed
+}
+
+enum TranscriptionStatus {
+  not_transcribed
+  transcribing
+  transcribed
+  failed
+}
+
+enum AgentSendStatus {
+  not_sent
+  sent
+  failed
+}
