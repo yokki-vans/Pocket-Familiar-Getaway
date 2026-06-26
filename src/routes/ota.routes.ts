@@ -62,6 +62,14 @@ export async function otaRoutes(app: FastifyInstance, prefix: string) {
         };
       }
       request.log.error({ error }, "OTA check failed");
+      if (error instanceof Error && "code" in error && error.code === "OTA_GITHUB_AUTH_REQUIRED") {
+        return reply.code(503).send({
+          error: {
+            code: "OTA_GITHUB_AUTH_REQUIRED",
+            message: "Gateway cannot access firmware GitHub releases. Set OTA_GITHUB_TOKEN in Railway."
+          }
+        });
+      }
       return reply.code(503).send({ error: { code: "OTA_UNAVAILABLE", message: "OTA release is unavailable" } });
     }
   });
@@ -88,6 +96,14 @@ export async function otaRoutes(app: FastifyInstance, prefix: string) {
         return reply.code(404).send({ error: { code: "OTA_DISABLED", message: "OTA is disabled" } });
       }
       request.log.error({ error }, "OTA firmware download failed");
+      if (error instanceof Error && "code" in error && error.code === "OTA_GITHUB_AUTH_REQUIRED") {
+        return reply.code(503).send({
+          error: {
+            code: "OTA_GITHUB_AUTH_REQUIRED",
+            message: "Gateway cannot access firmware GitHub releases. Set OTA_GITHUB_TOKEN in Railway."
+          }
+        });
+      }
       return reply.code(503).send({ error: { code: "OTA_UNAVAILABLE", message: "OTA asset is unavailable" } });
     }
   });

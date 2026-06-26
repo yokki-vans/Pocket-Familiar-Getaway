@@ -35,7 +35,15 @@ type Release = z.infer<typeof releaseSchema>;
 type ReleaseAsset = z.infer<typeof releaseAssetSchema>;
 
 export class OtaNotConfiguredError extends Error {}
-export class OtaUnavailableError extends Error {}
+export class OtaUnavailableError extends Error {
+  constructor(
+    message: string,
+    public readonly code = "OTA_UNAVAILABLE",
+    public readonly status?: number
+  ) {
+    super(message);
+  }
+}
 
 let cached:
   | {
@@ -65,7 +73,16 @@ async function githubGet(url: string, accept?: string) {
     headers: githubHeaders(accept),
     signal: AbortSignal.timeout(15000)
   });
-  if (!response.ok) throw new OtaUnavailableError(`GitHub request failed: ${response.status}`);
+  if (!response.ok) {
+    const authRequired = [401, 403, 404].includes(response.status);
+    throw new OtaUnavailableError(
+      authRequired
+        ? `GitHub release access failed: ${response.status}. Set OTA_GITHUB_TOKEN with read access to ${config.OTA_GITHUB_REPO}.`
+        : `GitHub request failed: ${response.status}`,
+      authRequired ? "OTA_GITHUB_AUTH_REQUIRED" : "OTA_UNAVAILABLE",
+      response.status
+    );
+  }
   return response;
 }
 
