@@ -1,7 +1,7 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { config } from "./config.js";
-import { logger } from "./logger.js";
+import { loggerOptions } from "./logger.js";
 import { prismaPlugin } from "./plugins/prisma.js";
 import { rateLimitPlugin } from "./plugins/rate-limit.js";
 import { multipartPlugin } from "./plugins/multipart.js";
@@ -16,7 +16,7 @@ import { audioWsRoutes } from "./routes/audio-ws.routes.js";
 
 export async function buildApp() {
   const app = Fastify({
-    logger,
+    logger: loggerOptions,
     trustProxy: true,
     bodyLimit: config.maxVoiceNoteBytes,
     disableRequestLogging: false
