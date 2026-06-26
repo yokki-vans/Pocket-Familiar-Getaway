@@ -14,6 +14,7 @@ import { commandRoutes } from "./routes/command.routes.js";
 import { voiceNotesRoutes } from "./routes/voice-notes.routes.js";
 import { audioWsRoutes } from "./routes/audio-ws.routes.js";
 import { otaRoutes } from "./routes/ota.routes.js";
+import { adminUiRoutes } from "./routes/admin-ui.routes.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -35,6 +36,7 @@ export async function buildApp() {
   await app.register(multipartPlugin);
   await app.register(websocketPlugin);
   await app.register(healthRoutes);
+  await app.register(adminUiRoutes);
   for (const prefix of ["/api/v1", "/v1"]) {
     await deviceRoutes(app, prefix);
     await adminRoutes(app, prefix);

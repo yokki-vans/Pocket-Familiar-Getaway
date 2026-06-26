@@ -39,6 +39,14 @@ The app listens on `PORT` and exposes:
 
 Only the token hash is stored. The raw `device_token` is returned once from `pair/complete`.
 
+Admin pairing UI is available at:
+
+```text
+https://<your-app>.up.railway.app/admin/pair
+```
+
+Open it, enter `ADMIN_API_KEY`, the six-digit code shown on the device, and a device label.
+
 ## Railway Deployment
 
 The recommended Railway setup is Dockerfile-based. The Dockerfile installs Tailscale, builds TypeScript into `dist/`, and starts `docker-entrypoint.sh`, which starts `tailscaled` before the Node app.
@@ -259,6 +267,12 @@ curl -X POST https://<your-app>.up.railway.app/api/v1/device/pair/complete \
 ```
 
 Save the returned `device_id`, `device_token`, `gateway_url`, and `active_agent` on the ESP32. The raw `device_token` is returned only once.
+
+You can also confirm the code in the browser:
+
+```text
+https://<your-app>.up.railway.app/admin/pair
+```
 
 ### 10. OTA Firmware Updates
 

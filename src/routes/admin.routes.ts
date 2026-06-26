@@ -11,6 +11,32 @@ const confirmSchema = z.object({
 });
 
 export async function adminRoutes(app: FastifyInstance, prefix: string) {
+  app.get(`${prefix}/admin/pair/pending`, { preHandler: requireAdmin, config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async () => {
+    const sessions = await app.prisma.pairingSession.findMany({
+      where: { status: "pending", expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        deviceName: true,
+        hardware: true,
+        firmwareVersion: true,
+        expiresAt: true,
+        createdAt: true
+      }
+    });
+    return {
+      sessions: sessions.map((session) => ({
+        id: session.id,
+        device_name: session.deviceName,
+        hardware: session.hardware,
+        firmware_version: session.firmwareVersion,
+        created_at: session.createdAt.toISOString(),
+        expires_at: session.expiresAt.toISOString()
+      }))
+    };
+  });
+
   app.post(`${prefix}/admin/pair/confirm`, { preHandler: requireAdmin, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const parsed = confirmSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: { code: "VALIDATION_ERROR", message: "Invalid request" } });
