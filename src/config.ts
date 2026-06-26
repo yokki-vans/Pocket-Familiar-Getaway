@@ -1,11 +1,37 @@
 import "dotenv/config";
 import { z } from "zod";
 
+function normalizePublicUrl(value: unknown) {
+  const fallback = "http://localhost:3000";
+  const raw = typeof value === "string" ? value.trim() : "";
+  const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
+  const railwayStaticUrl = process.env.RAILWAY_STATIC_URL?.trim();
+
+  const candidates = [
+    raw,
+    railwayStaticUrl,
+    railwayDomain,
+    fallback
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    const normalized = candidate.startsWith("http://") || candidate.startsWith("https://")
+      ? candidate
+      : `https://${candidate}`;
+    try {
+      return new URL(normalized).toString().replace(/\/$/, "");
+    } catch {
+      continue;
+    }
+  }
+  return fallback;
+}
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: z.string().min(1),
-  PUBLIC_GATEWAY_URL: z.string().url().default("http://localhost:3000"),
+  PUBLIC_GATEWAY_URL: z.preprocess(normalizePublicUrl, z.string().url()),
   ADMIN_API_KEY: z.string().min(12),
   DEVICE_TOKEN_PEPPER: z.string().min(12),
   PAIRING_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(300),

@@ -84,6 +84,8 @@ LOG_LEVEL=info
 
 Railway provides `PORT` automatically. Do not hardcode `PORT`.
 
+`PUBLIC_GATEWAY_URL` should include `https://`. If it is blank, the app will try Railway's `RAILWAY_STATIC_URL` or `RAILWAY_PUBLIC_DOMAIN`; if you provide it manually, prefer the explicit public Railway URL.
+
 ### 3. Generate Secrets
 
 Use long random values:
@@ -267,6 +269,10 @@ Native mode does not install or start Tailscale from this repository. Use Docker
 `Error: Cannot find module '/app/dist/server.js'`
 
 This means the TypeScript build did not produce the expected `dist/server.js`, the build did not run before the start command, or Railway was not using the Dockerfile image. Fix by using Dockerfile builder, redeploying the latest commit, or setting the native build command to run `npm run build`.
+
+`Invalid configuration: PUBLIC_GATEWAY_URL: Invalid url`
+
+Set `PUBLIC_GATEWAY_URL` to the full Railway URL, including `https://`, or leave it blank and let the app derive it from Railway's public-domain variables.
 
 `invalid key: API key ... not valid`
 
