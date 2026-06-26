@@ -10,6 +10,7 @@ Production-oriented Fastify gateway for Pocket Familiar ESP32-S3 devices. The de
 - Device config/status, agent listing, active-agent selection, text commands, WAV voice-note upload/list/detail/transcribe/send.
 - Result card normalization for a 1.8 inch display.
 - WebSocket `/api/v1/audio/command` protocol stub for live audio commands.
+- Authenticated OTA update checks and firmware download proxy backed by GitHub Releases.
 - Prisma PostgreSQL schema and initial migration.
 - Railway-ready Docker deployment with userspace Tailscale support.
 
@@ -79,6 +80,12 @@ TAILSCALE_HOSTNAME=pocket-gateway-railway
 TAILSCALE_STATE_DIR=/var/lib/tailscale
 TAILSCALE_EXTRA_ARGS=--accept-dns=true
 TAILSCALE_SOCKS5_ADDR=localhost:1055
+OTA_ENABLED=true
+OTA_GITHUB_REPO=yokki-vans/pocket-familiar-firmware
+OTA_GITHUB_TOKEN=<GitHub fine-grained PAT with read access to the private firmware repo>
+OTA_MANIFEST_ASSET=pocket-familiar-ota-manifest.json
+OTA_FIRMWARE_ASSET=pocket_familiar_os.bin
+OTA_CACHE_TTL_SECONDS=300
 LOG_LEVEL=info
 ```
 
@@ -246,7 +253,76 @@ curl -X POST https://<your-app>.up.railway.app/api/v1/device/pair/complete \
 
 Save the returned `device_id`, `device_token`, `gateway_url`, and `active_agent` on the ESP32. The raw `device_token` is returned only once.
 
-### 10. Native Node/Nixpacks Alternative
+### 10. OTA Firmware Updates
+
+The gateway can serve OTA updates from the private firmware repository:
+
+```text
+yokki-vans/pocket-familiar-firmware
+```
+
+The firmware repository publishes each tagged build as a GitHub Release with:
+
+- `pocket_familiar_os.bin`
+- `pocket-familiar-ota-manifest.json`
+
+The gateway reads only the latest GitHub Release, validates the manifest, and proxies the binary to the ESP32. The device never receives `OTA_GITHUB_TOKEN`.
+
+Create a fine-grained GitHub personal access token for Railway:
+
+1. GitHub -> Settings -> Developer settings -> Personal access tokens -> Fine-grained tokens.
+2. Repository access: only `yokki-vans/pocket-familiar-firmware`.
+3. Permissions: read-only `Contents` is enough for release asset downloads.
+4. Put the token in Railway as `OTA_GITHUB_TOKEN`.
+
+Device OTA check:
+
+```bash
+curl https://<your-app>.up.railway.app/api/v1/device/ota/check \
+  -H "x-device-id: $DEVICE_ID" \
+  -H "authorization: Bearer $DEVICE_TOKEN"
+```
+
+Optional query parameters:
+
+```text
+current_version=0.1.0
+hardware=waveshare-esp32-s3-touch-amoled-1.8
+```
+
+When an update is available, the response contains:
+
+```json
+{
+  "ota_enabled": true,
+  "update_available": true,
+  "latest_version": "0.2.0",
+  "firmware": {
+    "url": "https://<your-app>.up.railway.app/api/v1/device/ota/firmware?version=0.2.0",
+    "sha256": "64 hex chars",
+    "size": 1234567,
+    "content_type": "application/octet-stream"
+  }
+}
+```
+
+The ESP32 should download `firmware.url` with the same auth headers:
+
+```text
+X-Device-Id: <device_id>
+Authorization: Bearer <device_token>
+```
+
+To publish a new OTA build, tag the firmware repo:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+GitHub Actions will build the ESP-IDF project and attach the OTA manifest and `.bin` to the `v0.2.0` release. After `OTA_CACHE_TTL_SECONDS`, the gateway starts advertising that version.
+
+### 11. Native Node/Nixpacks Alternative
 
 If you intentionally disable Dockerfile mode, configure Railway build and start commands explicitly:
 
@@ -264,7 +340,7 @@ npm run prisma:migrate && npm run start
 
 Native mode does not install or start Tailscale from this repository. Use Dockerfile mode when Hermes must be reached through Tailscale.
 
-### 11. Troubleshooting Railway Logs
+### 12. Troubleshooting Railway Logs
 
 `Error: Cannot find module '/app/dist/server.js'`
 

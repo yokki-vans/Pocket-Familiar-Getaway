@@ -79,7 +79,7 @@ export async function deviceRoutes(app: FastifyInstance, prefix: string) {
     device_id: request.device?.id,
     active_agent: request.device?.activeAgent,
     gateway: { url: config.PUBLIC_GATEWAY_URL, api_version: "v1" },
-    features: { voice_notes: true, audio_command: true, transcription: true, ota: false },
+    features: { voice_notes: true, audio_command: true, transcription: true, ota: config.OTA_ENABLED },
     limits: { max_voice_note_mb: config.MAX_VOICE_NOTE_MB, max_audio_command_seconds: 60 }
   }));
 

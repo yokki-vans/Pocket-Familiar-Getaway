@@ -13,6 +13,7 @@ import { agentRoutes } from "./routes/agent.routes.js";
 import { commandRoutes } from "./routes/command.routes.js";
 import { voiceNotesRoutes } from "./routes/voice-notes.routes.js";
 import { audioWsRoutes } from "./routes/audio-ws.routes.js";
+import { otaRoutes } from "./routes/ota.routes.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -41,6 +42,7 @@ export async function buildApp() {
     await commandRoutes(app, prefix);
     await voiceNotesRoutes(app, prefix);
     await audioWsRoutes(app, prefix);
+    await otaRoutes(app, prefix);
   }
   return app;
 }
