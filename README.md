@@ -266,7 +266,7 @@ Native mode does not install or start Tailscale from this repository. Use Docker
 
 `Error: Cannot find module '/app/dist/server.js'`
 
-This means the TypeScript build did not run before the start command, or Railway was not using the Dockerfile image. Fix by using Dockerfile builder, or set the native build command to run `npm run build`.
+This means the TypeScript build did not produce the expected `dist/server.js`, the build did not run before the start command, or Railway was not using the Dockerfile image. Fix by using Dockerfile builder, redeploying the latest commit, or setting the native build command to run `npm run build`.
 
 `invalid key: API key ... not valid`
 
