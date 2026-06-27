@@ -8,7 +8,7 @@ import { getAgent } from "../agents/agent-registry.js";
 import { LocalStorageProvider } from "../storage/local-storage.provider.js";
 import { assertSafeWav, voiceNoteMetadataSchema } from "../voice-notes/wav-validation.js";
 import { newNoteId, transcribeNote } from "../voice-notes/voice-note.service.js";
-import { synthesizeSpeech } from "../tts/openai-tts.provider.js";
+import { synthesizeSpeech } from "../tts/index.js";
 import { config } from "../config.js";
 
 const audioParams = z.object({ file: z.string().regex(/^assistant-\d{4}-\d{2}-\d{2}-[A-Za-z0-9_-]+\.wav$/) });

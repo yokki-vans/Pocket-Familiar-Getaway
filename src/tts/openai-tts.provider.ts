@@ -6,7 +6,7 @@ import fetch from "node-fetch";
 import { nanoid } from "nanoid";
 import { config } from "../config.js";
 
-export async function synthesizeSpeech(text: string) {
+export async function synthesizeWithOpenAi(text: string) {
   if (!config.OPENAI_API_KEY || !text.trim()) return null;
   await mkdir(config.UPLOAD_DIR, { recursive: true });
   const fileName = `assistant-${new Date().toISOString().slice(0, 10)}-${nanoid(16)}.wav`;
