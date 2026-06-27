@@ -14,6 +14,8 @@ import { commandRoutes } from "./routes/command.routes.js";
 import { voiceNotesRoutes } from "./routes/voice-notes.routes.js";
 import { audioWsRoutes } from "./routes/audio-ws.routes.js";
 import { assistantRoutes } from "./routes/assistant.routes.js";
+import { voiceSessionRoutes } from "./routes/voice-session.routes.js";
+import { taskRoutes } from "./tasks/task.routes.js";
 import { otaRoutes } from "./routes/ota.routes.js";
 import { adminUiRoutes } from "./routes/admin-ui.routes.js";
 
@@ -45,6 +47,8 @@ export async function buildApp() {
     await commandRoutes(app, prefix);
     await voiceNotesRoutes(app, prefix);
     await assistantRoutes(app, prefix);
+    await voiceSessionRoutes(app, prefix);
+    await taskRoutes(app, prefix);
     await audioWsRoutes(app, prefix);
     await otaRoutes(app, prefix);
   }
