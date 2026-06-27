@@ -69,7 +69,7 @@ const schema = z.object({
   OPENAI_TTS_MODEL: z.string().default("gpt-4o-mini-tts"),
   OPENAI_TTS_VOICE: z.string().default("alloy"),
   ELEVENLABS_API_KEY: z.string().optional().default(""),
-  ELEVENLABS_VOICE_ID: z.string().default("21m00Tcm4TlvDq8ikWAM"),
+  ELEVENLABS_VOICE_ID: z.string().default("SAz9YHcvj6GT2YYXdXww"),
   ELEVENLABS_MODEL_ID: z.string().default("eleven_multilingual_v2"),
   ELEVENLABS_OUTPUT_FORMAT: z.string().default("pcm_16000"),
   TAILSCALE_ENABLED: z.preprocess(envBoolean, z.boolean()).default(false),
