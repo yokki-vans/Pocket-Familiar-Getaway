@@ -40,6 +40,12 @@ function shortSpeak(result: { kind?: string; body?: string; title?: string }) {
   return result.title || "Готово.";
 }
 
+function errorMessage(err: unknown) {
+  const raw = err instanceof Error ? err.message : String(err);
+  if (!raw || raw === "[object Object]") return "Voice session failed";
+  return raw.length > 120 ? `${raw.slice(0, 117)}...` : raw;
+}
+
 export async function voiceSessionRoutes(app: FastifyInstance, prefix: string) {
   app.get(`${prefix}/voice/session`, { websocket: true }, async (socket, request) => {
     const query = request.query as { device_id?: string; token?: string };
@@ -47,6 +53,7 @@ export async function voiceSessionRoutes(app: FastifyInstance, prefix: string) {
     const token = query.token ?? (header.startsWith("Bearer ") ? header.slice(7) : undefined);
     const device = await authenticateDeviceCredentials(app, query.device_id, token);
     if (!device) {
+      request.log.warn({ device_id: query.device_id }, "voice session unauthorized");
       socket.close(1008, "unauthorized");
       return;
     }
@@ -117,7 +124,8 @@ export async function voiceSessionRoutes(app: FastifyInstance, prefix: string) {
         safeSend(socket, { type: "assistant.state", state: card.kind === "error" ? "error" : "done" });
       } catch (err) {
         request.log.warn({ err }, "voice session failed");
-        safeSend(socket, { type: "error", code: "VOICE_SESSION_FAILED", message: "Voice session failed" });
+        safeSend(socket, { type: "error", code: "VOICE_SESSION_FAILED", message: errorMessage(err) });
+        safeSend(socket, { type: "assistant.state", state: "error" });
       }
     }
 
