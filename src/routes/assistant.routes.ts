@@ -9,9 +9,12 @@ import { LocalStorageProvider } from "../storage/local-storage.provider.js";
 import { assertSafeWav, voiceNoteMetadataSchema } from "../voice-notes/wav-validation.js";
 import { newNoteId, transcribeNote } from "../voice-notes/voice-note.service.js";
 import { synthesizeSpeech } from "../tts/index.js";
+import { resolveVoiceId } from "../tts/voices.js";
 import { config } from "../config.js";
 
 const audioParams = z.object({ file: z.string().regex(/^assistant-\d{4}-\d{2}-\d{2}-[A-Za-z0-9_-]+\.wav$/) });
+const voiceParams = z.object({ voiceId: z.string().min(8).max(64) });
+const previewText = "Привет, я Куби. Вітаю, я Кубі. Hello, I am Kubi.";
 
 export async function assistantRoutes(app: FastifyInstance, prefix: string) {
   const storage = new LocalStorageProvider();
@@ -87,7 +90,7 @@ export async function assistantRoutes(app: FastifyInstance, prefix: string) {
 
     let speechUrl: string | null = null;
     if (result.kind !== "error") {
-      const speech = await synthesizeSpeech(result.body).catch((err) => {
+      const speech = await synthesizeSpeech(result.body, { voiceId: metadata.assistant_voice_id }).catch((err) => {
         request.log.warn({ err }, "assistant speech synthesis failed");
         return null;
       });
@@ -102,6 +105,17 @@ export async function assistantRoutes(app: FastifyInstance, prefix: string) {
       response_text: result.body,
       speech_url: speechUrl
     };
+  });
+
+  app.get(`${prefix}/assistant/voice-preview/:voiceId`, { preHandler: requireDevice, config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const params = voiceParams.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: { code: "VALIDATION_ERROR", message: "Invalid voice" } });
+    const speech = await synthesizeSpeech(previewText, { voiceId: resolveVoiceId(params.data.voiceId) }).catch((err) => {
+      request.log.warn({ err }, "voice preview synthesis failed");
+      return null;
+    });
+    if (!speech) return reply.code(503).send({ ok: false, error: { code: "TTS_UNAVAILABLE", message: "Voice preview unavailable" } });
+    return reply.type("audio/wav").send(createReadStream(speech.filePath));
   });
 
   app.get(`${prefix}/assistant/audio/:file`, { preHandler: requireDevice }, async (request, reply) => {

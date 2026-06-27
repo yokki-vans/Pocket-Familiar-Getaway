@@ -5,10 +5,11 @@ export const voiceNoteMetadataSchema = z.object({
   title: z.string().max(80).optional(),
   created_at: z.string().datetime(),
   duration_ms: z.number().int().positive().max(10 * 60 * 1000),
-  sample_rate: z.union([z.literal(16000), z.literal(24000), z.literal(32000)]),
+  sample_rate: z.union([z.literal(16000), z.literal(24000), z.literal(32000), z.literal(48000)]),
   bits_per_sample: z.literal(16),
   channels: z.literal(1),
-  size_bytes: z.number().int().positive()
+  size_bytes: z.number().int().positive(),
+  assistant_voice_id: z.string().min(8).max(64).optional()
 });
 
 export function assertSafeWav(filename: string | undefined, mimetype: string) {

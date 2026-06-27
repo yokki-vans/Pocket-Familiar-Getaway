@@ -3,6 +3,7 @@ import path from "node:path";
 import fetch from "node-fetch";
 import { nanoid } from "nanoid";
 import { config } from "../config.js";
+import { resolveVoiceId } from "./voices.js";
 
 function pcmSampleRate(outputFormat: string) {
   const match = /^pcm_(\d+)$/.exec(outputFormat);
@@ -34,12 +35,12 @@ function toWav(audio: Buffer) {
   return Buffer.concat([wavHeader(audio.length, pcmSampleRate(config.ELEVENLABS_OUTPUT_FORMAT)), audio]);
 }
 
-export async function synthesizeWithElevenLabs(text: string) {
+export async function synthesizeWithElevenLabs(text: string, options: { voiceId?: string | null } = {}) {
   if (!config.ELEVENLABS_API_KEY || !text.trim()) return null;
   await mkdir(config.UPLOAD_DIR, { recursive: true });
   const fileName = `assistant-${new Date().toISOString().slice(0, 10)}-${nanoid(16)}.wav`;
   const filePath = path.join(config.UPLOAD_DIR, fileName);
-  const url = new URL(`/v1/text-to-speech/${encodeURIComponent(config.ELEVENLABS_VOICE_ID)}`, "https://api.elevenlabs.io");
+  const url = new URL(`/v1/text-to-speech/${encodeURIComponent(resolveVoiceId(options.voiceId))}`, "https://api.elevenlabs.io");
   url.searchParams.set("output_format", config.ELEVENLABS_OUTPUT_FORMAT);
   const res = await fetch(url, {
     method: "POST",
