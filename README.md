@@ -80,6 +80,8 @@ HERMES_BASE_URL=http://hermes-gateway:8080
 HERMES_LOGIN=<Hermes login>
 HERMES_PASSWORD=<Hermes password>
 HERMES_LOGIN_PATH=/api/v1/auth/login
+HERMES_HEALTH_PATH=/health
+HERMES_AUTH_PROVIDER=
 HERMES_USERNAME_FIELD=login
 HERMES_PASSWORD_FIELD=password
 HERMES_SESSION_TTL_SECONDS=3300
@@ -226,7 +228,7 @@ Expected with Tailscale and Hermes online:
 
 If Hermes is not reachable yet, `ok` may be `false` and Hermes will show `offline`. The ESP32 can still pair and use gateway endpoints that do not require Hermes.
 
-Hermes authentication uses login/password. The gateway logs in to Hermes server-side, caches the returned bearer token or session cookie, and retries once with a fresh login if Hermes returns `401` or `403`. Keep Hermes credentials only in Railway variables.
+Hermes authentication uses login/password. The gateway logs in to Hermes server-side, caches the returned bearer token or session cookie, and retries once with a fresh login if Hermes returns `401` or `403`. For Hermes Dashboard basic auth, use `HERMES_LOGIN_PATH=/auth/password-login`, `HERMES_AUTH_PROVIDER=basic`, `HERMES_USERNAME_FIELD=username`, `HERMES_PASSWORD_FIELD=password`, and `HERMES_HEALTH_PATH=/api/status`. Keep Hermes credentials only in Railway variables.
 
 ### 9. Pair the ESP32
 

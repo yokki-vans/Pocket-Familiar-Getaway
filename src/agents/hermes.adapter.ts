@@ -24,7 +24,7 @@ export class HermesAdapter implements AgentAdapter {
     if (!this.configured()) return { status: "not_configured", configured: false };
     try {
       const headers = await this.authHeaders();
-      const res = await fetch(new URL("/health", config.HERMES_BASE_URL), {
+      const res = await fetch(new URL(config.HERMES_HEALTH_PATH, config.HERMES_BASE_URL), {
         headers,
         signal: AbortSignal.timeout(Math.min(config.HERMES_TIMEOUT_MS, 5000)),
         agent: this.agent()
@@ -102,10 +102,11 @@ export class HermesAdapter implements AgentAdapter {
   }
 
   private async loginWithPassword(): Promise<HermesSession> {
-    const body = {
+    const body: Record<string, string> = {
       [config.HERMES_USERNAME_FIELD]: this.loginName(),
       [config.HERMES_PASSWORD_FIELD]: config.HERMES_PASSWORD
     };
+    if (config.HERMES_AUTH_PROVIDER) body.provider = config.HERMES_AUTH_PROVIDER;
     const response = await fetch(new URL(config.HERMES_LOGIN_PATH, config.HERMES_BASE_URL), {
       method: "POST",
       headers: { "content-type": "application/json" },
