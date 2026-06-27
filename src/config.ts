@@ -63,6 +63,8 @@ const schema = z.object({
   OPENAI_API_KEY: z.string().optional().default(""),
   STT_PROVIDER: z.enum(["mock", "openai"]).default("mock"),
   OPENAI_STT_MODEL: z.string().default("gpt-4o-mini-transcribe"),
+  OPENAI_TTS_MODEL: z.string().default("gpt-4o-mini-tts"),
+  OPENAI_TTS_VOICE: z.string().default("alloy"),
   TAILSCALE_ENABLED: z.preprocess(envBoolean, z.boolean()).default(false),
   TAILSCALE_AUTHKEY: z.string().optional().default(""),
   TAILSCALE_HOSTNAME: z.string().default("pocket-gateway-railway"),

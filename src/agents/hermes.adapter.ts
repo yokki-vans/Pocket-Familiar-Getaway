@@ -1,5 +1,6 @@
 import fetch, { type Response } from "node-fetch";
 import { SocksProxyAgent } from "socks-proxy-agent";
+import WebSocket from "ws";
 import { config } from "../config.js";
 import type { AgentAdapter, AgentHealth } from "./agent-adapter.js";
 import { normalizeResultCard, offlineAgentCard } from "./result-card.js";
@@ -36,46 +37,93 @@ export class HermesAdapter implements AgentAdapter {
   }
 
   async sendTextCommand(input: { text: string; deviceId: string; sessionId: string; context?: Record<string, unknown> }) {
-    return this.postCommand("/api/v1/command/text", input);
+    return this.sendViaDashboard(input.text, input);
   }
 
   async sendVoiceNote(input: { noteId: string; transcript?: string; filePath?: string; deviceId: string; sessionId: string; context?: Record<string, unknown> }) {
-    return this.postCommand("/api/v1/voice-note", input);
+    const text = input.transcript?.trim() || `Voice note ${input.noteId}`;
+    return this.sendViaDashboard(text, input);
   }
 
-  private async postCommand(path: string, payload: Record<string, unknown>) {
+  private async sendViaDashboard(text: string, payload: Record<string, unknown>) {
     const health = await this.health();
     if (health.status !== "online") return offlineAgentCard(this.id);
     try {
-      let res = await this.postAuthenticated(path, payload);
-      if (res.status === 401 || res.status === 403) {
-        this.session = undefined;
-        res = await this.postAuthenticated(path, payload);
-      }
-      if (!res.ok) return offlineAgentCard(this.id);
-      const data = await res.json() as Record<string, unknown>;
-      const result = typeof data.result === "object" && data.result ? data.result as Record<string, unknown> : data;
+      const body = await this.runDashboardChat(text, payload);
       return normalizeResultCard({
-        kind: result.kind as never,
-        title: String(result.title ?? "Sent to Hermes"),
-        body: String(result.body ?? result.message ?? "Your request was sent to Hermes."),
-        status: result.status ? String(result.status) : "queued",
+        kind: "answer",
+        title: "Hermes",
+        body,
+        status: "done",
         agent: this.id,
-        priority: result.priority as never,
-        actions: Array.isArray(result.actions) ? result.actions as never : [{ id: "done", label: "Done" }]
+        actions: [{ id: "done", label: "Done" }]
       });
     } catch {
       return offlineAgentCard(this.id);
     }
   }
 
-  private async postAuthenticated(path: string, payload: Record<string, unknown>) {
-    return fetch(new URL(path, config.HERMES_BASE_URL), {
+  private async runDashboardChat(text: string, payload: Record<string, unknown>, retried = false): Promise<string> {
+    const session = await this.login();
+    const ticketRes = await fetch(new URL("/api/auth/ws-ticket", config.HERMES_BASE_URL), {
       method: "POST",
-      headers: { ...(await this.authHeaders()), "content-type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(config.HERMES_TIMEOUT_MS),
+      headers: session.headers,
+      signal: AbortSignal.timeout(Math.min(config.HERMES_TIMEOUT_MS, 10000)),
       agent: this.agent()
+    });
+    if (ticketRes.status === 401 || ticketRes.status === 403) {
+      this.session = undefined;
+      if (!retried) return this.runDashboardChat(text, payload, true);
+    }
+    if (!ticketRes.ok) throw new Error(`Hermes ws ticket failed: ${ticketRes.status}`);
+    const ticketData = await ticketRes.json() as { ticket?: string };
+    if (!ticketData.ticket) throw new Error("Hermes ws ticket missing");
+
+    const base = new URL(config.HERMES_BASE_URL);
+    base.protocol = base.protocol === "https:" ? "wss:" : "ws:";
+    base.pathname = "/api/pty";
+    base.search = new URLSearchParams({
+      ticket: ticketData.ticket,
+      fresh: "1",
+      channel: `pocket-${String(payload.sessionId ?? Date.now())}`
+    }).toString();
+
+    return new Promise<string>((resolve, reject) => {
+      const chunks: string[] = [];
+      let sent = false;
+      let settled = false;
+      let lastDataAt = Date.now();
+      const settle = (err?: Error) => {
+        if (settled) return;
+        settled = true;
+        clearInterval(quietTimer);
+        clearTimeout(hardTimer);
+        try { ws.close(); } catch {}
+        if (err) reject(err);
+        else resolve(this.extractDashboardAnswer(chunks.join(""), text));
+      };
+      const ws = new WebSocket(base.toString(), { agent: this.agent() });
+      const hardTimer = setTimeout(() => settle(new Error("Hermes dashboard timeout")), config.HERMES_TIMEOUT_MS);
+      const quietTimer = setInterval(() => {
+        if (sent && Date.now() - lastDataAt > 5500) settle();
+      }, 1000);
+
+      ws.on("open", () => {
+        ws.send("\x1b[RESIZE:96;32]");
+        setTimeout(() => {
+          sent = true;
+          ws.send(`${text.trim()}\r`);
+        }, 1200);
+      });
+      ws.on("message", (data) => {
+        lastDataAt = Date.now();
+        chunks.push(Buffer.isBuffer(data) ? data.toString("utf8") : String(data));
+      });
+      ws.on("error", (err) => settle(err instanceof Error ? err : new Error(String(err))));
+      ws.on("close", () => {
+        if (sent && chunks.length) settle();
+        else settle(new Error("Hermes dashboard closed"));
+      });
     });
   }
 
@@ -169,5 +217,22 @@ export class HermesAdapter implements AgentAdapter {
     if (record.data && typeof record.data === "object") return this.extractExpiresIn(record.data);
     if (record.session && typeof record.session === "object") return this.extractExpiresIn(record.session);
     return undefined;
+  }
+
+  private extractDashboardAnswer(output: string, prompt: string) {
+    const clean = output
+      .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
+      .replace(/\x1b\][^\x07]*(\x07|\x1b\\)/g, "")
+      .replace(/\r/g, "\n")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((line) => !line.includes(prompt.trim()))
+      .filter((line) => !/^[-╭╰│╎─]+$/.test(line))
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    if (!clean) return "Hermes accepted the request, but did not return a readable response.";
+    return clean.slice(-1600);
   }
 }

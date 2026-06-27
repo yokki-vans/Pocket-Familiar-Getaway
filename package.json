@@ -21,6 +21,7 @@
     "@fastify/rate-limit": "^10.2.1",
     "@fastify/websocket": "^11.0.1",
     "@prisma/client": "^6.1.0",
+    "@types/ws": "^8.18.1",
     "dotenv": "^16.4.7",
     "fastify": "^5.1.0",
     "fastify-plugin": "^5.0.1",
@@ -29,6 +30,7 @@
     "pino": "^9.5.0",
     "prisma": "^6.1.0",
     "socks-proxy-agent": "^8.0.5",
+    "ws": "^8.21.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
