@@ -98,6 +98,7 @@ TAILSCALE_ENABLED=true
 TAILSCALE_AUTHKEY=<Tailscale auth key>
 TAILSCALE_HOSTNAME=pocket-gateway-railway
 TAILSCALE_STATE_DIR=/var/lib/tailscale
+TAILSCALE_STATE_FILE=/var/lib/tailscale/tailscaled.state
 TAILSCALE_EXTRA_ARGS=--accept-dns=true
 TAILSCALE_SOCKS5_ADDR=localhost:1055
 OTA_ENABLED=true
@@ -113,7 +114,29 @@ Railway provides `PORT` automatically. Do not hardcode `PORT`.
 
 `PUBLIC_GATEWAY_URL` should include `https://`. If it is blank, the app will try Railway's `RAILWAY_STATIC_URL` or `RAILWAY_PUBLIC_DOMAIN`; if you provide it manually, prefer the explicit public Railway URL.
 
-### 3. Generate Secrets
+### 3. Persist Tailscale State
+
+Railway containers have ephemeral filesystems. Without a Railway Volume, every rebuild starts with an empty `/var/lib/tailscale`, so Tailscale registers a new node such as `pocket-gateway-railway-13`.
+
+Attach a Railway Volume to the Pocket Gateway service:
+
+```text
+Mount path: /var/lib/tailscale
+```
+
+Keep these variables:
+
+```text
+TAILSCALE_STATE_DIR=/var/lib/tailscale
+TAILSCALE_STATE_FILE=/var/lib/tailscale/tailscaled.state
+TAILSCALE_HOSTNAME=pocket-gateway-railway
+```
+
+The first deploy with an empty volume uses `TAILSCALE_AUTHKEY` and creates one Tailscale node. Later restarts/rebuilds reuse `tailscaled.state` and come back as the same node instead of creating `pocket-gateway-railway-1`, `-2`, etc.
+
+After this is working, delete the old duplicate `pocket-gateway-railway-*` machines from the Tailscale admin console. For a long-lived server node, disable key expiry for the remaining `pocket-gateway-railway` machine in Tailscale if your tailnet policy requires it.
+
+### 4. Generate Secrets
 
 Use long random values:
 
@@ -123,15 +146,15 @@ openssl rand -base64 32
 
 Use separate values for `ADMIN_API_KEY` and `DEVICE_TOKEN_PEPPER`. Never put real keys in `.env.example`, README, firmware, or commits.
 
-### 4. Tailscale Auth Key
+### 5. Tailscale Auth Key
 
 In the Tailscale admin console:
 
 1. Go to **Settings -> Keys**.
 2. Create an auth key for the Railway gateway.
 3. Recommended options:
-   - Reusable if Railway redeploys often without persistent Tailscale state.
-   - Ephemeral for stateless deployments where old nodes should disappear automatically.
+   - Reusable.
+   - Not ephemeral when you want one stable Railway gateway node.
    - Pre-approved if your tailnet requires device approval.
    - Tagged with `tag:pocket-gateway`.
 4. Store the full key in Railway as `TAILSCALE_AUTHKEY`.
@@ -144,7 +167,7 @@ invalid key: API key ... not valid
 
 The gateway will still start, but `/health` will report Tailscale and Hermes as offline.
 
-### 5. Hermes URL Through Tailscale
+### 6. Hermes URL Through Tailscale
 
 Use one of these forms:
 
@@ -166,7 +189,7 @@ TAILSCALE_SOCKS5_ADDR=localhost:1055
 
 The Hermes adapter will route outbound Hermes HTTP requests through that SOCKS5 proxy.
 
-### 6. Deploy
+### 7. Deploy
 
 Push to `main`:
 
@@ -185,10 +208,10 @@ The entrypoint:
 1. Creates `TAILSCALE_STATE_DIR`.
 2. Starts `tailscaled --tun=userspace-networking`.
 3. Starts the SOCKS5 proxy.
-4. Runs `tailscale up` when `TAILSCALE_ENABLED=true`.
+4. Uses existing `TAILSCALE_STATE_FILE` when present, or registers with `TAILSCALE_AUTHKEY` on first boot.
 5. Starts `node dist/server.js`.
 
-### 7. Run Database Migrations
+### 8. Run Database Migrations
 
 Run migrations once after PostgreSQL is attached. You can do this from Railway with a one-off command:
 
@@ -204,7 +227,7 @@ npm run prisma:migrate && npm run start
 
 For Dockerfile mode, the image entrypoint is required for Tailscale. Run migrations as a Railway one-off command or from a CI step before deploy.
 
-### 8. Verify Health
+### 9. Verify Health
 
 Open:
 
@@ -235,7 +258,7 @@ If Hermes is not reachable yet, `ok` may be `false` and Hermes will show `offlin
 
 Hermes authentication uses login/password. The gateway logs in to Hermes server-side, caches the returned bearer token or session cookie, and retries once with a fresh login if Hermes returns `401` or `403`. For Hermes Dashboard basic auth, use `HERMES_LOGIN_PATH=/auth/password-login`, `HERMES_AUTH_PROVIDER=basic`, `HERMES_USERNAME_FIELD=username`, `HERMES_PASSWORD_FIELD=password`, and `HERMES_HEALTH_PATH=/api/status`. Keep Hermes credentials only in Railway variables.
 
-### 9. Pair the ESP32
+### 10. Pair the ESP32
 
 Start pairing from the device:
 
@@ -281,7 +304,7 @@ You can also confirm the code in the browser:
 https://<your-app>.up.railway.app/admin/pair
 ```
 
-### 10. OTA Firmware Updates
+### 11. OTA Firmware Updates
 
 The gateway can serve OTA updates from the private firmware repository:
 
@@ -350,7 +373,7 @@ git push origin v0.2.0
 
 GitHub Actions will build the ESP-IDF project and attach the OTA manifest and `.bin` to the `v0.2.0` release. After `OTA_CACHE_TTL_SECONDS`, the gateway starts advertising that version.
 
-### 11. Native Node/Nixpacks Alternative
+### 12. Native Node/Nixpacks Alternative
 
 If you intentionally disable Dockerfile mode, configure Railway build and start commands explicitly:
 
@@ -368,7 +391,7 @@ npm run prisma:migrate && npm run start
 
 Native mode does not install or start Tailscale from this repository. Use Dockerfile mode when Hermes must be reached through Tailscale.
 
-### 12. Troubleshooting Railway Logs
+### 13. Troubleshooting Railway Logs
 
 `Error: Cannot find module '/app/dist/server.js'`
 
@@ -405,7 +428,7 @@ The Docker image installs `tailscaled` and starts it with:
 
 This avoids privileged mode, `/dev/net/tun`, and host networking. The Hermes adapter uses `TAILSCALE_SOCKS5_ADDR` for outbound requests when it is set. If Tailscale is unavailable, the app still starts and health reports Hermes/Tailscale as offline.
 
-Create a tagged reusable or ephemeral auth key in Tailscale admin. Recommended tag: `tag:pocket-gateway`. Put Hermes Gateway behind `tag:hermes-gateway`.
+Create a tagged reusable auth key in Tailscale admin. Do not use an ephemeral key if the Railway gateway should keep the same Tailscale identity across rebuilds. Recommended tag: `tag:pocket-gateway`. Put Hermes Gateway behind `tag:hermes-gateway`.
 
 Recommended ACL:
 
@@ -429,7 +452,7 @@ Do not allow Pocket Gateway to access the whole tailnet.
 
 ## Storage Notes
 
-Voice notes are stored under `UPLOAD_DIR` for v1. Railway filesystem is ephemeral. This is acceptable for prototype use, but production should replace `LocalStorageProvider` with S3/R2 or another persistent object store. Persistent Tailscale state reduces re-auth events; ephemeral nodes and auth keys are cleaner for stateless redeploys.
+Voice notes are stored under `UPLOAD_DIR` for v1. Railway filesystem is ephemeral. This is acceptable for prototype use, but production should replace `LocalStorageProvider` with S3/R2 or another persistent object store. Tailscale state should live on a Railway Volume mounted at `/var/lib/tailscale` when you want one stable tailnet machine across redeploys.
 
 ## Security Notes
 
