@@ -46,12 +46,15 @@ export class OtaUnavailableError extends Error {
 }
 
 let cached:
-  | {
-      expiresAt: number;
-      release: Release;
-      manifest: OtaManifest;
-      firmwareAsset: ReleaseAsset;
-    }
+  | Map<
+      string,
+      {
+        expiresAt: number;
+        release: Release;
+        manifest: OtaManifest;
+        firmwareAsset: ReleaseAsset;
+      }
+    >
   | undefined;
 
 function githubHeaders(accept = "application/vnd.github+json") {
@@ -99,14 +102,29 @@ async function fetchReleaseAssetJson(asset: ReleaseAsset) {
   return response.json();
 }
 
-export async function getLatestOtaRelease() {
+function cacheKey(hardware?: string) {
+  return hardware && hardware.length > 0 ? hardware : "__default__";
+}
+
+function manifestAssetNames(hardware?: string) {
+  return hardware
+    ? [`pocket-familiar-ota-manifest-${hardware}.json`, config.OTA_MANIFEST_ASSET]
+    : [config.OTA_MANIFEST_ASSET];
+}
+
+export async function getLatestOtaRelease(hardware?: string) {
   assertOtaConfigured();
   const now = Date.now();
-  if (cached && cached.expiresAt > now) return cached;
+  const key = cacheKey(hardware);
+  const hit = cached?.get(key);
+  if (hit && hit.expiresAt > now) return hit;
 
   const release = await fetchLatestRelease();
-  const manifestAsset = release.assets.find((asset) => asset.name === config.OTA_MANIFEST_ASSET);
-  if (!manifestAsset) throw new OtaUnavailableError(`Release asset ${config.OTA_MANIFEST_ASSET} not found`);
+  const names = manifestAssetNames(hardware);
+  const manifestAsset = names
+    .map((name) => release.assets.find((asset) => asset.name === name))
+    .find((asset): asset is ReleaseAsset => Boolean(asset));
+  if (!manifestAsset) throw new OtaUnavailableError(`Release asset ${names[0]} not found`);
 
   const manifest = otaManifestSchema.parse(await fetchReleaseAssetJson(manifestAsset));
   const firmwareAsset = release.assets.find((asset) => asset.name === manifest.firmware_asset || asset.name === config.OTA_FIRMWARE_ASSET);
@@ -116,17 +134,19 @@ export async function getLatestOtaRelease() {
     throw new OtaUnavailableError("Firmware asset size does not match manifest");
   }
 
-  cached = {
+  const value = {
     expiresAt: now + config.OTA_CACHE_TTL_SECONDS * 1000,
     release,
     manifest,
     firmwareAsset
   };
-  return cached;
+  cached ??= new Map();
+  cached.set(key, value);
+  return value;
 }
 
-export async function downloadLatestFirmware(): Promise<{ response: Response; manifest: OtaManifest; asset: ReleaseAsset }> {
-  const latest = await getLatestOtaRelease();
+export async function downloadLatestFirmware(hardware?: string): Promise<{ response: Response; manifest: OtaManifest; asset: ReleaseAsset }> {
+  const latest = await getLatestOtaRelease(hardware);
   const response = await githubGet(
     `https://api.github.com/repos/${config.OTA_GITHUB_REPO}/releases/assets/${latest.firmwareAsset.id}`,
     "application/octet-stream"

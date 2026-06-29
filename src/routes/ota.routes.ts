@@ -11,7 +11,8 @@ const otaCheckQuerySchema = z.object({
 });
 
 const otaDownloadQuerySchema = z.object({
-  version: z.string().min(1).max(40).optional()
+  version: z.string().min(1).max(40).optional(),
+  hardware: z.string().min(1).max(120).optional()
 });
 
 export async function otaRoutes(app: FastifyInstance, prefix: string) {
@@ -22,13 +23,14 @@ export async function otaRoutes(app: FastifyInstance, prefix: string) {
     if (!parsed.success) return reply.code(400).send({ error: { code: "VALIDATION_ERROR", message: "Invalid request" } });
 
     try {
-      const latest = await getLatestOtaRelease();
       const currentVersion = parsed.data.current_version ?? request.device.firmwareVersion;
       const hardware = parsed.data.hardware ?? request.device.hardware;
+      const latest = await getLatestOtaRelease(hardware);
       const hardwareMatches = latest.manifest.hardware === hardware;
       const updateAvailable = hardwareMatches && isNewerVersion(latest.manifest.version, currentVersion);
       const firmwareUrl = new URL(`${prefix}/device/ota/firmware`, config.PUBLIC_GATEWAY_URL);
       firmwareUrl.searchParams.set("version", latest.manifest.version);
+      firmwareUrl.searchParams.set("hardware", hardware);
 
       return {
         ota_enabled: true,
@@ -75,13 +77,19 @@ export async function otaRoutes(app: FastifyInstance, prefix: string) {
   });
 
   app.get(`${prefix}/device/ota/firmware`, { preHandler: requireDevice }, async (request, reply) => {
+    if (!request.device) return reply.code(401).send({ error: { code: "DEVICE_UNAUTHORIZED", message: "Device unauthorized" } });
+
     const parsed = otaDownloadQuerySchema.safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: { code: "VALIDATION_ERROR", message: "Invalid request" } });
 
     try {
-      const { response, manifest, asset } = await downloadLatestFirmware();
+      const hardware = parsed.data.hardware ?? request.device.hardware;
+      const { response, manifest, asset } = await downloadLatestFirmware(hardware);
       if (parsed.data.version && parsed.data.version !== manifest.version) {
         return reply.code(404).send({ error: { code: "OTA_VERSION_NOT_FOUND", message: "OTA version not found" } });
+      }
+      if (manifest.hardware !== hardware) {
+        return reply.code(409).send({ error: { code: "OTA_HARDWARE_MISMATCH", message: "OTA hardware mismatch" } });
       }
       if (!response.body) return reply.code(503).send({ error: { code: "OTA_UNAVAILABLE", message: "OTA asset is unavailable" } });
 
