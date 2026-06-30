@@ -53,6 +53,7 @@ let cached:
         release: Release;
         manifest: OtaManifest;
         firmwareAsset: ReleaseAsset;
+        manifestAssetName: string;
       }
     >
   | undefined;
@@ -107,8 +108,9 @@ function cacheKey(hardware?: string) {
 }
 
 function manifestAssetNames(hardware?: string) {
-  return hardware
-    ? [`pocket-familiar-ota-manifest-${hardware}.json`, config.OTA_MANIFEST_ASSET]
+  const safe = hardware?.trim();
+  return safe && !safe.includes("/") && !safe.includes("\\")
+    ? [`pocket-familiar-ota-manifest-${safe}.json`, config.OTA_MANIFEST_ASSET]
     : [config.OTA_MANIFEST_ASSET];
 }
 
@@ -138,7 +140,8 @@ export async function getLatestOtaRelease(hardware?: string) {
     expiresAt: now + config.OTA_CACHE_TTL_SECONDS * 1000,
     release,
     manifest,
-    firmwareAsset
+    firmwareAsset,
+    manifestAssetName: manifestAsset.name
   };
   cached ??= new Map();
   cached.set(key, value);
