@@ -17,9 +17,9 @@ export async function transcribeNote(app: FastifyInstance, deviceId: string, not
       where: { id: note.id },
       data: { transcript, transcriptionStatus: "transcribed" }
     });
-  } catch {
+  } catch (err) {
     await app.prisma.voiceNote.update({ where: { id: note.id }, data: { transcriptionStatus: "failed" } });
-    throw new Error("TRANSCRIPTION_FAILED");
+    throw err instanceof Error ? err : new Error("TRANSCRIPTION_FAILED");
   }
 }
 

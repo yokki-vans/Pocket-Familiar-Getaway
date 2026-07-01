@@ -28,6 +28,13 @@ export async function voiceNotesRoutes(app: FastifyInstance, prefix: string) {
     if (!filePart || filePart.type !== "file" || !metadata) {
       return reply.code(400).send({ error: { code: "VALIDATION_ERROR", message: "Invalid request" } });
     }
+    const existing = await app.prisma.voiceNote.findFirst({
+      where: { deviceId: request.device.id, localNoteId: metadata.local_note_id }
+    });
+    if (existing) {
+      filePart.file.resume();
+      return { ok: true, note_id: existing.id, status: existing.status, existing: true };
+    }
     try {
       assertSafeWav(filePart.filename, filePart.mimetype);
     } catch {
@@ -54,6 +61,12 @@ export async function voiceNotesRoutes(app: FastifyInstance, prefix: string) {
         activeAgent: request.device.activeAgent,
         createdAtDevice: new Date(metadata.created_at)
       }
+    }).catch(async (err) => {
+      const duplicate = await app.prisma.voiceNote.findFirst({
+        where: { deviceId: request.device!.id, localNoteId: metadata!.local_note_id }
+      });
+      if (duplicate) return duplicate;
+      throw err;
     });
     return { ok: true, note_id: note.id, status: "uploaded" };
   });
@@ -65,8 +78,10 @@ export async function voiceNotesRoutes(app: FastifyInstance, prefix: string) {
       const note = await transcribeNote(app, request.device.id, params.data.id);
       if (!note) return reply.code(404).send({ error: { code: "NOTE_NOT_FOUND", message: "Note not found" } });
       return { ok: true, note_id: note.id, transcription_status: note.transcriptionStatus, transcript: note.transcript };
-    } catch {
-      return reply.code(500).send({ ok: false, error: { code: "TRANSCRIPTION_FAILED", message: "Transcription failed" } });
+    } catch (err) {
+      request.log.warn({ err, note_id: params.success ? params.data.id : undefined }, "voice note transcription failed");
+      const message = err instanceof Error && err.message ? err.message : "Transcription failed";
+      return reply.code(500).send({ ok: false, error: { code: "TRANSCRIPTION_FAILED", message } });
     }
   });
 
