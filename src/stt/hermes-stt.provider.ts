@@ -122,15 +122,15 @@ export class HermesSttProvider implements SttProvider {
       "/api/transcribe",
       "/transcribe"
     ]));
-    let lastError: unknown;
+    const errors: string[] = [];
     for (const path of paths) {
       try {
         return await this.postTranscription(path, input);
       } catch (err) {
-        lastError = err;
+        errors.push(err instanceof Error ? err.message : String(err));
       }
     }
-    throw lastError instanceof Error ? lastError : new Error("Hermes transcription failed");
+    throw new Error(`Hermes transcription failed: ${errors.join("; ")}`);
   }
 
   private async postTranscription(path: string, input: { filePath: string; mimeType: string }) {
